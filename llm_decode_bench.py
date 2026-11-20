@@ -10526,6 +10526,23 @@ def _apply_fixed_token_route(payload: dict, forced_token_id: Optional[int]) -> N
     }
 
 
+def _sample_window_end(
+    last_time: Optional[float],
+    sample_count: int,
+    measurement_start: Optional[float],
+    fallback: Optional[float],
+) -> Optional[float]:
+    """Return ``last_time`` when it marks post-start measured samples, else ``fallback``."""
+    if (
+        measurement_start is not None
+        and sample_count > 0
+        and last_time is not None
+        and last_time > measurement_start
+    ):
+        return last_time
+    return fallback
+
+
 async def run_one_cell(
     client: httpx.AsyncClient,
     base_url: str,
@@ -11614,15 +11631,17 @@ async def run_one_cell(
         if measurement_start:
             measurement_usage_tokens = shared_usage_token_count[0] - measurement_usage_tokens_start
             measurement_tokens = shared_token_count[0] - measurement_tokens_start
-            usage_elapsed_end = (
-                shared_usage_last_time[0]
-                if measurement_usage_tokens > 0 and shared_usage_last_time[0] > measurement_start
-                else now
+            usage_elapsed_end = _sample_window_end(
+                shared_usage_last_time[0],
+                measurement_usage_tokens,
+                measurement_start,
+                now,
             )
-            token_elapsed_end = (
-                shared_token_last_time[0]
-                if measurement_tokens > 0 and shared_token_last_time[0] > measurement_start
-                else now
+            token_elapsed_end = _sample_window_end(
+                shared_token_last_time[0],
+                measurement_tokens,
+                measurement_start,
+                now,
             )
             usage_elapsed = usage_elapsed_end - measurement_start
             token_elapsed = token_elapsed_end - measurement_start
@@ -11761,15 +11780,17 @@ async def run_one_cell(
     measurement_tokens = max(0, shared_token_count[0] - measurement_tokens_start)
     measurement_usage_tokens = max(0, shared_usage_token_count[0] - measurement_usage_tokens_start)
     aggregate_source = ""
-    usage_measure_end = (
-        shared_usage_last_time[0]
-        if measurement_start is not None and measurement_usage_tokens > 0 and shared_usage_last_time[0] > measurement_start
-        else measurement_end
+    usage_measure_end = _sample_window_end(
+        shared_usage_last_time[0],
+        measurement_usage_tokens,
+        measurement_start,
+        measurement_end,
     )
-    token_measure_end = (
-        shared_token_last_time[0]
-        if measurement_start is not None and measurement_tokens > 0 and shared_token_last_time[0] > measurement_start
-        else measurement_end
+    token_measure_end = _sample_window_end(
+        shared_token_last_time[0],
+        measurement_tokens,
+        measurement_start,
+        measurement_end,
     )
     usage_measure_duration = (
         usage_measure_end - measurement_start
